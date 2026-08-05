@@ -7,6 +7,7 @@ const crypto = require('crypto');
 
 const WECOM_ADMIN_ORIGIN = 'https://work.weixin.qq.com';
 const QR_REFRESH_MS = 6 * 24 * 60 * 60 * 1000;
+const SESSION_KEEPALIVE_MS = 15 * 60 * 1000;
 
 function absoluteAdminUrl(value) {
   return new URL(value, WECOM_ADMIN_ORIGIN).toString();
@@ -38,21 +39,18 @@ class WxPluginManager {
     this.qrCode = '';
     this.qrUpdatedAt = 0;
     this.pendingLogins = new Map();
-    this.refreshTimer = null;
+    this.maintenanceTimer = null;
+    this.maintenanceRunning = false;
+    this.lastKeepAliveAt = 0;
+    this.lastKeepAliveError = '';
   }
 
   async init() {
     await fsp.mkdir(this.dataDir, { recursive: true });
     await this.loadState();
-    this.refreshTimer = setInterval(() => {
-      if (this.sid && Date.now() - this.qrUpdatedAt >= QR_REFRESH_MS) {
-        this.refreshQrCode().catch(() => {});
-      }
-    }, 60 * 60 * 1000);
-    this.refreshTimer.unref?.();
-    if (this.sid && Date.now() - this.qrUpdatedAt >= QR_REFRESH_MS) {
-      this.refreshQrCode().catch(() => {});
-    }
+    this.maintenanceTimer = setInterval(() => this.maintainSession(), SESSION_KEEPALIVE_MS);
+    this.maintenanceTimer.unref?.();
+    if (this.sid) this.maintainSession();
   }
 
   encrypt(value) {
@@ -112,8 +110,33 @@ class WxPluginManager {
     return {
       cookieAvailable: Boolean(this.sid),
       qrAvailable: Boolean(this.qrCode),
-      qrUpdatedAt: this.qrUpdatedAt || null
+      qrUpdatedAt: this.qrUpdatedAt || null,
+      lastKeepAliveAt: this.lastKeepAliveAt || null,
+      lastKeepAliveError: this.lastKeepAliveError || null
     };
+  }
+
+  async maintainSession() {
+    if (!this.sid || this.maintenanceRunning) return;
+    this.maintenanceRunning = true;
+    try {
+      if (Date.now() - this.qrUpdatedAt >= QR_REFRESH_MS) await this.refreshQrCode();
+      else await this.keepSessionAlive();
+      this.lastKeepAliveAt = Date.now();
+      this.lastKeepAliveError = '';
+    } catch (error) {
+      this.lastKeepAliveError = String(error?.message || error);
+    } finally {
+      this.maintenanceRunning = false;
+    }
+  }
+
+  async keepSessionAlive() {
+    if (!this.sid) throw new Error('wecom_admin_login_required');
+    const endpoint = new URL('/wework_admin/wxplugin/getDetail', WECOM_ADMIN_ORIGIN);
+    const result = await jsonRequest(endpoint, { headers: { Cookie: `wwrtx.sid=${this.sid}` } });
+    if (!result.data?.qrCode) throw new Error('wecom_admin_session_unavailable');
+    return true;
   }
 
   async startLogin() {

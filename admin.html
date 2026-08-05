@@ -342,6 +342,19 @@
           <img id="loginQr" class="qr" alt="企业微信管理员登录二维码">
         </div>
 
+        <form id="captchaForm" class="hidden">
+          <div class="field">
+            <label for="captcha">手机验证码</label>
+            <div class="input-wrap">
+              <input id="captcha" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="请输入企业微信发送的验证码" required>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit"><span>确认验证码</span></button>
+            <button id="resendCaptcha" class="btn btn-secondary" type="button"><span>发送验证码</span></button>
+          </div>
+        </form>
+
         <div class="actions">
           <button id="start" class="btn btn-primary" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h3M21 18v3"/></svg>
@@ -363,8 +376,8 @@
   </main>
 
   <script>
-    const loginForm=document.getElementById('loginForm'),manager=document.getElementById('manager'),statusBox=document.getElementById('status'),loginQr=document.getElementById('loginQr'),loginQrWrap=document.getElementById('loginQrWrap');
-    let pollTimer=null;
+    const loginForm=document.getElementById('loginForm'),manager=document.getElementById('manager'),statusBox=document.getElementById('status'),loginQr=document.getElementById('loginQr'),loginQrWrap=document.getElementById('loginQrWrap'),captchaForm=document.getElementById('captchaForm');
+    let pollTimer=null,pendingLoginKey='';
 
     async function api(url,options={}){
       const r=await fetch(url,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -415,19 +428,25 @@
       try{
         clearInterval(pollTimer);
         const d=await api('/api/admin/wxplugin/login/start',{method:'POST',body:'{}'});
+        pendingLoginKey=d.key;
+        captchaForm.classList.add('hidden');
         loginQr.src=`/api/admin/wxplugin/login/qrcode?key=${encodeURIComponent(d.key)}&t=${Date.now()}`;
         loginQrWrap.classList.remove('hidden');
         showStatus('请使用企业微信管理员账号扫码。','warn');
         pollTimer=setInterval(async()=>{
           try{
             const s=await api(`/api/admin/wxplugin/login/status?key=${encodeURIComponent(d.key)}`);
-            const kind=s.status==='success'?'ok':(s.status==='expired'||s.status==='cancelled'||s.status==='mobile_verification_required'?'err':'warn');
+            const kind=s.status==='success'?'ok':(s.status==='expired'||s.status==='cancelled'?'err':'warn');
             showStatus(s.message,kind);
             if(['success','expired','cancelled','mobile_verification_required'].includes(s.status)){
               clearInterval(pollTimer);
               if(s.status==='success'){
                 loginQrWrap.classList.add('hidden');
                 await loadStatus();
+              }else if(s.status==='mobile_verification_required'){
+                loginQrWrap.classList.add('hidden');
+                captchaForm.classList.remove('hidden');
+                document.getElementById('captcha').focus();
               }
             }
           }catch{
@@ -437,6 +456,37 @@
         },1500);
       }catch(err){
         showStatus(`无法生成登录二维码：${err.message}`,'err');
+      }
+    });
+
+    captchaForm.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const btn=captchaForm.querySelector('button[type=submit]');
+      btn.disabled=true;
+      try{
+        const code=document.getElementById('captcha').value.trim();
+        const d=await api('/api/admin/wxplugin/login/captcha/confirm',{method:'POST',body:JSON.stringify({key:pendingLoginKey,code})});
+        captchaForm.classList.add('hidden');
+        document.getElementById('captcha').value='';
+        showStatus(d.message,'ok');
+        await loadStatus();
+      }catch(err){
+        showStatus(`验证码验证失败：${err.message}`,'err');
+      }finally{
+        btn.disabled=false;
+      }
+    });
+
+    document.getElementById('resendCaptcha').addEventListener('click',async e=>{
+      const btn=e.currentTarget;
+      btn.disabled=true;
+      try{
+        const d=await api('/api/admin/wxplugin/login/captcha/send',{method:'POST',body:JSON.stringify({key:pendingLoginKey})});
+        showStatus(d.message,'warn');
+      }catch(err){
+        showStatus(`验证码发送失败：${err.message}`,'err');
+      }finally{
+        setTimeout(()=>{btn.disabled=false},60000);
       }
     });
 
@@ -451,6 +501,7 @@
 
     document.getElementById('logout').addEventListener('click',async()=>{
       clearInterval(pollTimer);
+      pendingLoginKey='';
       await api('/api/admin/logout',{method:'POST',body:'{}'}).catch(()=>{});
       location.reload();
     });

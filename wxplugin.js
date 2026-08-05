@@ -147,7 +147,11 @@ class WxPluginManager {
   }
 
   async pollLogin(key) {
-    this.requirePendingLogin(key);
+    const pending = this.requirePendingLogin(key);
+    if (pending.mobileVerification) {
+      return { status: 'mobile_verification_required', message: '请输入企业微信发送的手机验证码' };
+    }
+    if (pending.exchanging) return { status: 'waiting', message: '正在建立企业微信管理会话' };
     const endpoint = new URL('/wework_admin/wwqrlogin/check', WECOM_ADMIN_ORIGIN);
     endpoint.searchParams.set('r', String(Date.now()));
     endpoint.searchParams.set('status', '');
@@ -161,9 +165,15 @@ class WxPluginManager {
     if (status === 'QRCODE_SCAN_FAIL') return { status: 'cancelled', message: '登录已取消' };
     if (status !== 'QRCODE_SCAN_SUCC' || !data.auth_code) return { status: 'waiting', message: '等待确认' };
 
-    const login = await this.exchangeLogin(String(data.auth_code), key);
+    pending.exchanging = true;
+    let login;
+    try {
+      login = await this.exchangeLogin(String(data.auth_code), key);
+    } finally {
+      pending.exchanging = false;
+    }
     if (login.needsMobileVerification) {
-      return { status: 'mobile_verification_required', message: '企业微信要求手机验证码，本服务未保存登录 Cookie' };
+      return { status: 'mobile_verification_required', message: '企业微信要求手机验证，请先点击发送验证码' };
     }
     this.pendingLogins.delete(key);
     await this.refreshQrCode();
@@ -192,11 +202,75 @@ class WxPluginManager {
     const sid = cookieValue(secondResponse.headers, 'wwrtx.sid');
     if (!sid) {
       const location = secondResponse.headers.get('location') || '';
-      return { needsMobileVerification: location.includes('tl_key=') };
+      const verificationUrl = location ? new URL(absoluteAdminUrl(location)) : null;
+      const tlKey = verificationUrl?.searchParams.get('tl_key') || '';
+      if (!tlKey) return { needsMobileVerification: false };
+      await fetch(verificationUrl, {
+        headers: { Cookie: `wwrtx.tmp_sid=${tmpSid}` },
+        signal: AbortSignal.timeout(10000)
+      });
+      const pending = this.requirePendingLogin(key);
+      pending.mobileVerification = {
+        tmpSid,
+        tlKey,
+        referer: verificationUrl.toString()
+      };
+      return { needsMobileVerification: true };
     }
     this.sid = sid;
     await this.saveState();
     return { needsMobileVerification: false };
+  }
+
+  async captchaRequest(key, captcha) {
+    const pending = this.requirePendingLogin(key);
+    const verification = pending.mobileVerification;
+    if (!verification) throw new Error('wecom_mobile_verification_not_pending');
+    const response = await fetch(`${WECOM_ADMIN_ORIGIN}/wework_admin/mobile_confirm/confirm_captcha`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cookie': `wwrtx.tmp_sid=${verification.tmpSid}`,
+        'Referer': verification.referer
+      },
+      body: JSON.stringify(captcha ? { captcha, tl_key: verification.tlKey } : { tl_key: verification.tlKey }),
+      signal: AbortSignal.timeout(10000)
+    });
+    const text = await response.text();
+    let result;
+    try { result = JSON.parse(text); } catch { throw new Error('wecom_invalid_captcha_response'); }
+    if (!response.ok) throw new Error(`wecom_captcha_http_${response.status}`);
+    return { result, verification };
+  }
+
+  async sendMobileCaptcha(key) {
+    const { result } = await this.captchaRequest(key, '');
+    const error = result?.result;
+    if (error) throw new Error(error.humanMessage || error.message || `wecom_captcha_${error.errCode || 'failed'}`);
+    return { status: 'mobile_verification_required', message: '验证码已发送，请查看管理员手机' };
+  }
+
+  async confirmMobileCaptcha(key, code) {
+    const captcha = String(code || '').trim();
+    if (!/^\d{4,8}$/.test(captcha)) throw new Error('invalid_captcha');
+    const { result, verification } = await this.captchaRequest(key, captcha);
+    const error = result?.result;
+    if (error) throw new Error(error.humanMessage || error.message || `wecom_captcha_${error.errCode || 'failed'}`);
+
+    const endpoint = new URL('/wework_admin/login/choose_corp', WECOM_ADMIN_ORIGIN);
+    endpoint.searchParams.set('tl_key', verification.tlKey);
+    const response = await fetch(endpoint, {
+      redirect: 'manual',
+      headers: { Cookie: `wwrtx.tmp_sid=${verification.tmpSid}` },
+      signal: AbortSignal.timeout(10000)
+    });
+    const sid = cookieValue(response.headers, 'wwrtx.sid');
+    if (!sid) throw new Error('wecom_session_cookie_missing');
+    this.sid = sid;
+    this.pendingLogins.delete(key);
+    await this.saveState();
+    await this.refreshQrCode();
+    return { status: 'success', message: '手机验证成功，关注二维码已更新' };
   }
 
   async refreshQrCode() {

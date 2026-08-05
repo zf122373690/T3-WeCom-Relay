@@ -1,0 +1,11 @@
+services:
+  wecom-relay:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:18081:18081"
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data

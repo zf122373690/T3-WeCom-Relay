@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>微信扫码关注企业通知</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      /* OKLCH 色彩体系 — 企业微信绿调升级 */
+      --primary: oklch(0.62 0.15 155);
+      --primary-strong: oklch(0.52 0.16 155);
+      --primary-soft: oklch(0.95 0.03 155);
+      --primary-softer: oklch(0.97 0.015 155);
+      --accent: oklch(0.72 0.18 145);
+      --surface: oklch(0.99 0.004 155);
+      --surface-raised: #ffffff;
+      --surface-variant: oklch(0.96 0.008 155);
+      --outline: oklch(0.88 0.01 155);
+      --outline-soft: oklch(0.93 0.006 155);
+      --text: oklch(0.28 0.02 155);
+      --text-muted: oklch(0.55 0.015 155);
+      --text-faint: oklch(0.68 0.01 155);
+      --success: oklch(0.6 0.14 150);
+      --warning: oklch(0.7 0.15 70);
+
+      /* 8px 网格间距 */
+      --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+      --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+      --s-12: 48px; --s-16: 64px; --s-20: 80px;
+
+      /* 字体 */
+      --font-display: 'DM Sans', 'Noto Sans SC', system-ui, sans-serif;
+      --font-body: 'DM Sans', 'Noto Sans SC', system-ui, sans-serif;
+
+      /* 阴影 */
+      --shadow-sm: 0 1px 2px oklch(0.25 0.02 155 / 0.06);
+      --shadow-md: 0 1px 2px oklch(0.25 0.02 155 / 0.04), 0 4px 16px oklch(0.25 0.02 155 / 0.06);
+      --shadow-lg: 0 2px 6px oklch(0.25 0.02 155 / 0.06), 0 12px 36px oklch(0.25 0.02 155 / 0.1);
+      --shadow-glow: 0 8px 32px oklch(0.62 0.15 155 / 0.18);
+
+      /* 动效 */
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+
+      --radius: 14px;
+      --radius-sm: 10px;
+      --radius-lg: 20px;
+      --maxw: 1080px;
+    }
+
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      font-family:var(--font-body);
+      color:var(--text);
+      background:var(--surface);
+      line-height:1.6;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      overflow-x:hidden;
+    }
+
+    /* ===== 背景装饰 ===== */
+    .bg-decor{
+      position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+    }
+    .bg-decor::before,.bg-decor::after{
+      content:'';position:absolute;border-radius:50%;filter:blur(80px);
+    }
+    .bg-decor::before{
+      width:520px;height:520px;top:-180px;right:-120px;
+      background:radial-gradient(circle, oklch(0.85 0.1 155 / 0.5), transparent 70%);
+    }
+    .bg-decor::after{
+      width:420px;height:420px;bottom:-140px;left:-100px;
+      background:radial-gradient(circle, oklch(0.88 0.08 180 / 0.35), transparent 70%);
+    }
+    .bg-grid{
+      position:fixed;inset:0;z-index:-1;pointer-events:none;
+      background-image:
+        linear-gradient(oklch(0.7 0.01 155 / 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, oklch(0.7 0.01 155 / 0.04) 1px, transparent 1px);
+      background-size:48px 48px;
+      mask-image:radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 75%);
+    }
+
+    /* ===== 顶部导航 ===== */
+    .topbar{
+      position:sticky;top:0;z-index:50;
+      background:oklch(0.99 0.004 155 / 0.82);
+      backdrop-filter:saturate(180%) blur(16px);
+      -webkit-backdrop-filter:saturate(180%) blur(16px);
+      border-bottom:1px solid var(--outline-soft);
+    }
+    .topbar-inner{
+      width:min(var(--maxw), calc(100% - 40px));
+      height:60px;margin:auto;
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .brand{
+      display:flex;align-items:center;gap:10px;
+      font-size:15px;font-weight:600;letter-spacing:-0.01em;
+    }
+    .brand-mark{
+      width:28px;height:28px;border-radius:8px;
+      background:linear-gradient(135deg, var(--primary), var(--primary-strong));
+      display:grid;place-items:center;color:#fff;
+      box-shadow:var(--shadow-glow);
+      font-weight:700;font-size:14px;
+    }
+    .service-state{
+      display:flex;align-items:center;gap:8px;
+      font-size:13px;color:var(--text-muted);
+      padding:6px 12px;border-radius:999px;
+      background:var(--surface-variant);
+      border:1px solid var(--outline-soft);
+    }
+    .state-dot{
+      width:7px;height:7px;border-radius:50%;
+      background:var(--text-faint);
+      animation:pulse 2.4s var(--ease) infinite;
+    }
+    .state-dot.live{background:var(--success);box-shadow:0 0 0 0 oklch(0.6 0.14 150 / 0.5)}
+    .state-dot.live{animation:pulse-live 2s var(--ease) infinite}
+    @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+    @keyframes pulse-live{
+      0%{box-shadow:0 0 0 0 oklch(0.6 0.14 150 / 0.5)}
+      70%{box-shadow:0 0 0 6px oklch(0.6 0.14 150 / 0)}
+      100%{box-shadow:0 0 0 0 oklch(0.6 0.14 150 / 0)}
+    }
+
+    /* ===== 公告条 ===== */
+    .notice-bar{
+      background:linear-gradient(90deg, var(--primary-soft), oklch(0.96 0.02 170));
+      border-bottom:1px solid oklch(0.88 0.04 155);
+    }
+    .notice-inner{
+      width:min(var(--maxw), calc(100% - 40px));margin:auto;
+      padding:11px 0;font-size:13px;line-height:1.6;text-align:center;
+      color:oklch(0.4 0.08 155);
+      display:flex;align-items:center;justify-content:center;gap:8px;
+    }
+    .notice-inner strong{color:var(--primary-strong);font-weight:600}
+    .notice-icon{
+      width:16px;height:16px;flex-shrink:0;
+      color:var(--primary);
+    }
+
+    /* ===== Hero 区 ===== */
+    .hero{
+      width:min(var(--maxw), calc(100% - 40px));margin:0 auto;
+      padding:var(--s-16) 0 var(--s-12);
+      display:grid;grid-template-columns:minmax(0,1fr) 360px;
+      gap:var(--s-12);align-items:center;
+    }
+    .eyebrow{
+      display:inline-flex;align-items:center;gap:6px;
+      margin:0 0 var(--s-4);
+      padding:5px 12px;border-radius:999px;
+      background:var(--primary-soft);color:var(--primary-strong);
+      font-size:12px;font-weight:600;letter-spacing:0.02em;
+      border:1px solid oklch(0.88 0.04 155);
+    }
+    .eyebrow::before{
+      content:'';width:5px;height:5px;border-radius:50%;background:var(--primary);
+    }
+    .hero h1{
+      margin:0;
+      font-family:var(--font-display);
+      font-size:clamp(32px, 4.2vw, 46px);
+      line-height:1.12;letter-spacing:-0.025em;font-weight:700;
+      color:var(--text);
+    }
+    .hero h1 .accent{
+      background:linear-gradient(120deg, var(--primary), var(--accent));
+      -webkit-background-clip:text;background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+    .lead{
+      max-width:560px;margin:var(--s-5) 0 0;
+      color:var(--text-muted);font-size:17px;line-height:1.75;
+    }
+    .benefits{
+      display:flex;gap:10px;flex-wrap:wrap;
+      margin:var(--s-6) 0 0;padding:0;list-style:none;
+    }
+    .benefits li{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:7px 13px;border-radius:999px;
+      background:var(--surface-raised);
+      border:1px solid var(--outline-soft);
+      font-size:13px;color:var(--text);font-weight:500;
+      box-shadow:var(--shadow-sm);
+      transition:transform 180ms var(--ease), box-shadow 180ms var(--ease);
+    }
+    .benefits li:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
+    .benefits li::before{
+      content:'';width:14px;height:14px;border-radius:50%;
+      background:var(--primary-soft);
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23238a4f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+      background-size:10px;background-position:center;background-repeat:no-repeat;
+    }
+
+    /* ===== 二维码工具卡 ===== */
+    .qr-tool{
+      width:360px;justify-self:end;
+      background:var(--surface-raised);
+      border:1px solid var(--outline-soft);
+      border-radius:var(--radius-lg);
+      padding:var(--s-8) var(--s-6) var(--s-6);
+      box-shadow:var(--shadow-lg);
+      text-align:center;
+      position:relative;
+      overflow:hidden;
+    }
+    .qr-tool::before{
+      content:'';position:absolute;inset:0 0 auto 0;height:4px;
+      background:linear-gradient(90deg, var(--primary), var(--accent), var(--primary));
+      background-size:200% 100%;
+      animation:shimmer 4s linear infinite;
+    }
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    .qr-frame{
+      position:relative;width:240px;height:240px;margin:0 auto var(--s-3);
+      border-radius:var(--radius);padding:10px;
+      background:linear-gradient(135deg, var(--primary-soft), oklch(0.96 0.02 170));
+      box-shadow:inset 0 0 0 1px oklch(0.88 0.04 155);
+    }
+    .qr-frame::after{
+      content:'';position:absolute;inset:6px;border-radius:10px;
+      background:#fff;
+      box-shadow:var(--shadow-sm);
+    }
+    .qr,.qr-placeholder{position:relative;z-index:1;border-radius:10px}
+    .qr{
+      display:block;width:220px;height:220px;object-fit:contain;margin:0 auto;
+      background:#fff;
+    }
+    .qr-placeholder{
+      width:220px;height:220px;margin:0 auto;
+      display:grid;place-items:center;
+      background:oklch(0.96 0.005 155);color:var(--text-faint);
+      font-size:13px;line-height:1.7;padding:20px;text-align:center;
+    }
+    .qr-placeholder svg{width:36px;height:36px;margin-bottom:8px;opacity:.5}
+
+    .qr-caption{
+      margin:var(--s-4) 0 0;color:var(--text);
+      font-size:14px;font-weight:600;letter-spacing:-0.01em;
+    }
+    .qr-time{
+      min-height:18px;margin:var(--s-1) 0 0;
+      color:var(--text-faint);font-size:12px;
+    }
+    .qr-divider{
+      height:1px;margin:var(--s-5) 0;
+      background:linear-gradient(90deg, transparent, var(--outline), transparent);
+    }
+    .remind{
+      width:100%;
+      height:42px;border:1.5px solid var(--outline);
+      border-radius:var(--radius-sm);padding:0 var(--s-4);
+      background:var(--surface-raised);color:var(--text);
+      font:inherit;font-size:14px;font-weight:500;cursor:pointer;
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      transition:all 180ms var(--ease);
+    }
+    .remind:hover:not(:disabled){
+      border-color:var(--primary);color:var(--primary-strong);
+      background:var(--primary-softer);transform:translateY(-1px);
+      box-shadow:var(--shadow-md);
+    }
+    .remind:active:not(:disabled){transform:translateY(0)}
+    .remind:disabled{color:var(--text-faint);cursor:not-allowed;opacity:.7}
+    .remind svg{width:15px;height:15px}
+    .remind-message{
+      min-height:18px;margin:var(--s-2) 0 0;
+      font-size:12px;color:var(--text-muted);
+    }
+    .qr-note{
+      margin:var(--s-4) 0 0;padding-top:var(--s-4);
+      border-top:1px dashed var(--outline);
+      font-size:12px;line-height:1.7;color:var(--text-faint);text-align:left;
+    }
+    .qr-note a{color:var(--primary-strong);text-decoration:none;border-bottom:1px solid oklch(0.7 0.06 155)}
+    .qr-note a:hover{border-bottom-color:var(--primary-strong)}
+
+    /* ===== 教程区 ===== */
+    .guide-band{
+      padding:var(--s-16) 0 var(--s-20);
+      background:linear-gradient(180deg, transparent, var(--primary-softer) 40%, transparent);
+      border-top:1px solid var(--outline-soft);
+      border-bottom:1px solid var(--outline-soft);
+    }
+    .guide{
+      width:min(var(--maxw), calc(100% - 40px));margin:0 auto;
+      display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);
+      gap:var(--s-12);align-items:center;
+    }
+    .guide-lead h2{
+      margin:0 0 var(--s-2);
+      font-family:var(--font-display);
+      font-size:clamp(24px, 3vw, 32px);line-height:1.2;
+      letter-spacing:-0.02em;font-weight:700;
+    }
+    .guide-lead .sub{color:var(--text-muted);font-size:15px;margin:0 0 var(--s-8)}
+    .steps{
+      display:grid;grid-template-columns:1fr 1fr;gap:var(--s-4);
+    }
+    .step{
+      position:relative;
+      background:var(--surface-raised);
+      border:1px solid var(--outline-soft);
+      border-radius:var(--radius);
+      padding:var(--s-5);
+      box-shadow:var(--shadow-sm);
+      transition:all 220ms var(--ease);
+    }
+    .step:hover{
+      transform:translateY(-3px);
+      box-shadow:var(--shadow-md);
+      border-color:oklch(0.85 0.04 155);
+    }
+    .step-number{
+      display:inline-flex;align-items:center;justify-content:center;
+      width:30px;height:30px;border-radius:9px;
+      background:linear-gradient(135deg, var(--primary), var(--primary-strong));
+      color:#fff;font-weight:700;font-size:14px;
+      box-shadow:var(--shadow-glow);
+      margin-bottom:var(--s-3);
+    }
+    .step h3{
+      margin:0 0 var(--s-2);font-size:15px;font-weight:600;
+      letter-spacing:-0.01em;color:var(--text);
+    }
+    .step p{
+      margin:0;font-size:13px;line-height:1.65;color:var(--text-muted);
+    }
+
+    .phone-shot{
+      width:100%;max-width:340px;justify-self:center;
+      border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-lg);
+      border:6px solid #fff;
+      transition:transform 300ms var(--ease);
+    }
+    .phone-shot:hover{transform:scale(1.02)}
+
+    /* ===== 页脚 ===== */
+    .footer{
+      padding:var(--s-10) 0 var(--s-12);
+      text-align:center;color:var(--text-faint);font-size:12px;
+      border-top:1px solid var(--outline-soft);
+    }
+
+    .hidden{display:none!important}
+
+    /* ===== 入场动画 ===== */
+    @keyframes rise{
+      from{opacity:0;transform:translateY(14px)}
+      to{opacity:1;transform:translateY(0)}
+    }
+    .hero>*,.guide>*{animation:rise 700ms var(--ease) backwards}
+    .hero>*:nth-child(1){animation-delay:80ms}
+    .hero>*:nth-child(2){animation-delay:200ms}
+    .guide>*:nth-child(1){animation-delay:120ms}
+    .guide>*:nth-child(2){animation-delay:240ms}
+    .step{animation:rise 600ms var(--ease) backwards}
+    .step:nth-child(1){animation-delay:300ms}
+    .step:nth-child(2){animation-delay:380ms}
+    .step:nth-child(3){animation-delay:460ms}
+    .step:nth-child(4){animation-delay:540ms}
+
+    /* ===== 响应式 ===== */
+    @media(max-width:880px){
+      .hero{grid-template-columns:1fr;gap:var(--s-10);padding:var(--s-10) 0 var(--s-10)}
+      .qr-tool{width:100%;max-width:380px;justify-self:center}
+      .guide{grid-template-columns:1fr;gap:var(--s-8)}
+      .steps{grid-template-columns:1fr 1fr}
+    }
+    @media(max-width:520px){
+      .topbar-inner{height:54px}
+      .brand{font-size:14px}
+      .service-state{font-size:12px;padding:5px 10px}
+      .hero{padding:var(--s-8) 0}
+      .hero h1{font-size:30px}
+      .lead{font-size:15px}
+      .steps{grid-template-columns:1fr}
+      .guide-band{padding:var(--s-12) 0 var(--s-12)}
+      .qr-tool{padding:var(--s-6) var(--s-5) var(--s-5)}
+      .qr-frame,.qr,.qr-placeholder{width:200px;height:200px}
+      .qr{width:180px;height:180px}
+      .qr-placeholder{width:180px;height:180px}
+    }
+
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-decor"></div>
+  <div class="bg-grid"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">T3</span>
+        <span>企业微信通知服务</span>
+      </div>
+      <div class="service-state" id="status">
+        <span class="state-dot"></span>
+        <span>正在检查服务状态…</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="notice-bar">
+    <div class="notice-inner">
+      <svg class="notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      <span><strong>企业微信官方直连通道：</strong>中间无中转服务器，T3 设备通知数据直接发送至腾讯企业微信服务器。</span>
+    </div>
+  </div>
+
+  <main>
+    <section class="hero">
+      <div>
+        <span class="eyebrow">微信插件</span>
+        <h1>用微信扫码，<br>接收 <span class="accent">T3 设备通知</span></h1>
+        <p class="lead">无需额外下载应用。使用个人微信扫描右侧二维码，完成身份确认后，即可在微信中接收企业通知并使用企业应用。</p>
+        <ul class="benefits">
+          <li>接收企业应用通知</li>
+          <li>查看企业消息</li>
+          <li>进入企业应用</li>
+        </ul>
+      </div>
+      <div class="qr-tool">
+        <div class="qr-frame">
+          <img id="followQr" class="qr hidden" alt="微信插件关注二维码">
+          <div id="qrPlaceholder" class="qr-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h3M21 18v3"/></svg>
+            <span>关注二维码<br>尚未生成</span>
+          </div>
+        </div>
+        <p class="qr-caption">打开微信「扫一扫」</p>
+        <p id="qrMessage" class="qr-time">正在读取二维码…</p>
+        <div class="qr-divider"></div>
+        <button id="remindAdmin" class="remind" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span>提醒管理员更新二维码</span>
+        </button>
+        <p id="remindMessage" class="remind-message"></p>
+        <p class="qr-note">关注二维码有效期为 7 天。若二维码失效，可点击上方按钮提醒管理员更新。微信侧无法通过搜索企业名称关注微信插件，需使用本页二维码扫码。教程依据 <a href="https://open.work.weixin.qq.com/help2/pc/14799?person_id=1" target="_blank" rel="noopener noreferrer">企业微信官方帮助</a>。</p>
+      </div>
+    </section>
+
+    <section class="guide-band">
+      <div class="guide">
+        <div class="guide-lead">
+          <h2>四步完成关注与配置</h2>
+          <p class="sub">从扫码到接收通知，整个流程不超过两分钟。</p>
+          <div class="steps">
+            <div class="step">
+              <span class="step-number">1</span>
+              <h3>使用个人微信扫码</h3>
+              <p>打开微信扫一扫，对准页面上方的关注二维码。</p>
+            </div>
+            <div class="step">
+              <span class="step-number">2</span>
+              <h3>确认企业成员身份</h3>
+              <p>按页面提示确认身份；如需验证，请填写企业通讯录中绑定的手机号或邮箱。</p>
+            </div>
+            <div class="step">
+              <span class="step-number">3</span>
+              <h3>获取企业微信账号 ID</h3>
+              <p>关注成功后系统会自动推送账号 ID。若未收到，可手动进入微信「通讯录 → 短信转发 → ID获取」，发送任意消息获取回复。</p>
+            </div>
+            <div class="step">
+              <span class="step-number">4</span>
+              <h3>填写到 T3 设备</h3>
+              <p>复制账号 ID，进入 T3 设备管理页面，填写到「转发通道 → T3专属企业微信应用 → 接收人」并保存。</p>
+            </div>
+          </div>
+        </div>
+        <img class="phone-shot" src="/assets/wechat-my-enterprise.png" alt="微信通讯录中我的企业入口示例" loading="lazy">
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>企业微信通知服务 · 数据直连腾讯服务器 · 仅供企业内部使用</div>
+  </footer>
+
+  <script>
+    const followQr=document.getElementById('followQr'),qrPlaceholder=document.getElementById('qrPlaceholder'),qrMessage=document.getElementById('qrMessage'),statusEl=document.getElementById('status');
+    const stateDot=statusEl.querySelector('.state-dot'),stateText=statusEl.querySelector('span:last-child');
+
+    fetch('/health').then(r=>r.json()).then(d=>{
+      if(d.configured){
+        stateDot.classList.add('live');
+        stateText.textContent='通知服务运行中';
+      }else{
+        stateText.textContent='通知服务尚未配置';
+      }
+    }).catch(()=>{
+      stateText.textContent='服务状态暂不可用';
+    });
+
+    fetch(`/api/wxplugin/qrcode?t=${Date.now()}`,{cache:'no-store'}).then(r=>r.json()).then(d=>{
+      if(!d.available||!d.qrCode){qrMessage.textContent='请提醒管理员生成二维码';return}
+      followQr.src=d.qrCode;
+      followQr.classList.remove('hidden');
+      qrPlaceholder.classList.add('hidden');
+      qrMessage.textContent=d.updatedAt?`更新于 ${new Date(d.updatedAt).toLocaleString()}`:'二维码已更新';
+    }).catch(()=>qrMessage.textContent='二维码暂时不可用');
+
+    document.getElementById('remindAdmin').addEventListener('click',async e=>{
+      const button=e.currentTarget,message=document.getElementById('remindMessage');
+      button.disabled=true;
+      message.textContent='正在通知管理员…';
+      try{
+        const r=await fetch('/api/wxplugin/remind-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        const d=await r.json().catch(()=>({}));
+        if(r.ok){message.textContent='✓ 已通知管理员';return}
+        message.textContent=d.error==='reminder_cooldown'?'管理员近期已收到提醒':'提醒发送失败，请稍后再试';
+        if(d.error!=='reminder_cooldown')button.disabled=false;
+      }catch{
+        message.textContent='提醒发送失败，请稍后再试';
+        button.disabled=false;
+      }
+    });
+  </script>
+</body>
+</html>

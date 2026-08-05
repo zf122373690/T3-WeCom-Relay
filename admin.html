@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>微信插件二维码管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --primary: oklch(0.62 0.15 155);
+      --primary-strong: oklch(0.52 0.16 155);
+      --primary-soft: oklch(0.95 0.03 155);
+      --accent: oklch(0.72 0.18 145);
+      --surface: oklch(0.99 0.004 155);
+      --surface-raised: #ffffff;
+      --surface-variant: oklch(0.96 0.008 155);
+      --outline: oklch(0.88 0.01 155);
+      --outline-soft: oklch(0.93 0.006 155);
+      --text: oklch(0.28 0.02 155);
+      --text-muted: oklch(0.55 0.015 155);
+      --text-faint: oklch(0.68 0.01 155);
+      --success: oklch(0.6 0.14 150);
+      --warning: oklch(0.7 0.15 70);
+      --danger: oklch(0.6 0.18 25);
+
+      --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;--s-8:32px;--s-10:40px;--s-12:48px;
+
+      --font-display:'DM Sans','Noto Sans SC',system-ui,sans-serif;
+      --font-body:'DM Sans','Noto Sans SC',system-ui,sans-serif;
+
+      --shadow-sm:0 1px 2px oklch(0.25 0.02 155 / 0.06);
+      --shadow-md:0 1px 2px oklch(0.25 0.02 155 / 0.04),0 4px 16px oklch(0.25 0.02 155 / 0.06);
+      --shadow-lg:0 2px 6px oklch(0.25 0.02 155 / 0.06),0 12px 36px oklch(0.25 0.02 155 / 0.1);
+      --shadow-glow:0 8px 32px oklch(0.62 0.15 155 / 0.18);
+
+      --ease:cubic-bezier(0.16,1,0.3,1);
+      --radius:14px;
+      --radius-sm:10px;
+      --radius-lg:20px;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;font-family:var(--font-body);color:var(--text);
+      background:var(--surface);line-height:1.6;
+      -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+      min-height:100vh;display:grid;grid-template-columns:1fr 1fr;
+    }
+
+    /* ===== 左侧品牌展示区 ===== */
+    .brand-side{
+      position:relative;overflow:hidden;
+      background:linear-gradient(135deg, oklch(0.42 0.13 155), oklch(0.36 0.12 165) 60%, oklch(0.3 0.1 175));
+      color:#fff;padding:var(--s-12);
+      display:flex;flex-direction:column;justify-content:space-between;
+    }
+    .brand-side::before{
+      content:'';position:absolute;width:500px;height:500px;border-radius:50%;
+      top:-150px;right:-150px;
+      background:radial-gradient(circle, oklch(0.7 0.18 145 / 0.35), transparent 65%);
+      filter:blur(20px);
+    }
+    .brand-side::after{
+      content:'';position:absolute;width:380px;height:380px;border-radius:50%;
+      bottom:-100px;left:-80px;
+      background:radial-gradient(circle, oklch(0.65 0.15 170 / 0.3), transparent 65%);
+      filter:blur(20px);
+    }
+    .brand-logo{
+      position:relative;z-index:1;
+      display:flex;align-items:center;gap:12px;
+      font-size:16px;font-weight:600;letter-spacing:-0.01em;
+    }
+    .brand-logo .mark{
+      width:34px;height:34px;border-radius:10px;
+      background:rgba(255,255,255,0.18);backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.25);
+      display:grid;place-items:center;font-weight:700;font-size:15px;
+    }
+    .brand-hero{position:relative;z-index:1;max-width:420px}
+    .brand-hero h1{
+      margin:0 0 var(--s-4);
+      font-family:var(--font-display);
+      font-size:clamp(28px,3.2vw,38px);line-height:1.15;
+      letter-spacing:-0.025em;font-weight:700;
+    }
+    .brand-hero p{
+      margin:0;font-size:15px;line-height:1.75;
+      color:oklch(0.92 0.02 155 / 0.85);
+    }
+    .brand-features{
+      position:relative;z-index:1;
+      display:grid;gap:var(--s-3);margin-top:var(--s-8);
+    }
+    .feature{
+      display:flex;align-items:flex-start;gap:var(--s-3);
+      padding:var(--s-3) var(--s-4);
+      background:rgba(255,255,255,0.08);backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:var(--radius-sm);
+      font-size:13px;line-height:1.6;
+    }
+    .feature svg{width:18px;height:18px;flex-shrink:0;margin-top:1px;color:oklch(0.85 0.15 145)}
+    .feature strong{display:block;margin-bottom:2px;font-weight:600}
+    .feature span{color:oklch(0.92 0.02 155 / 0.7)}
+    .brand-foot{
+      position:relative;z-index:1;
+      font-size:12px;color:oklch(0.92 0.02 155 / 0.55);
+    }
+
+    /* ===== 右侧操作面板 ===== */
+    .panel-side{
+      display:flex;align-items:center;justify-content:center;
+      padding:var(--s-10) var(--s-6);
+      position:relative;
+    }
+    .panel-side::before{
+      content:'';position:absolute;inset:0;pointer-events:none;
+      background-image:
+        linear-gradient(oklch(0.7 0.01 155 / 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, oklch(0.7 0.01 155 / 0.035) 1px, transparent 1px);
+      background-size:40px 40px;
+      mask-image:radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 75%);
+    }
+    .panel{
+      position:relative;z-index:1;
+      width:100%;max-width:440px;
+      background:var(--surface-raised);
+      border:1px solid var(--outline-soft);
+      border-radius:var(--radius-lg);
+      padding:var(--s-10) var(--s-8);
+      box-shadow:var(--shadow-lg);
+    }
+    .panel-head{
+      margin-bottom:var(--s-8);
+    }
+    .panel-eyebrow{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 11px;border-radius:999px;
+      background:var(--primary-soft);color:var(--primary-strong);
+      font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
+      margin-bottom:var(--s-3);
+    }
+    .panel h1{
+      margin:0;font-family:var(--font-display);
+      font-size:24px;line-height:1.2;letter-spacing:-0.02em;font-weight:700;
+    }
+    .panel-sub{margin:var(--s-2) 0 0;color:var(--text-muted);font-size:14px}
+
+    .field{margin-bottom:var(--s-5)}
+    .field label{
+      display:block;font-size:13px;font-weight:500;
+      color:var(--text);margin-bottom:var(--s-2);
+    }
+    .input-wrap{position:relative}
+    .input-wrap svg{
+      position:absolute;left:14px;top:50%;transform:translateY(-50%);
+      width:17px;height:17px;color:var(--text-faint);pointer-events:none;
+    }
+    input{
+      width:100%;height:46px;
+      border:1.5px solid var(--outline);
+      border-radius:var(--radius-sm);
+      padding:0 14px 0 42px;
+      font:inherit;font-size:15px;color:var(--text);
+      background:var(--surface);
+      transition:border-color 180ms var(--ease),box-shadow 180ms var(--ease),background 180ms var(--ease);
+    }
+    input::placeholder{color:var(--text-faint)}
+    input:hover{border-color:oklch(0.8 0.02 155)}
+    input:focus{
+      outline:none;border-color:var(--primary);border-width:2px;
+      padding-left:41px;
+      background:var(--surface-raised);
+      box-shadow:0 0 0 4px oklch(0.62 0.15 155 / 0.1);
+    }
+
+    .btn{
+      width:100%;height:46px;border:0;border-radius:var(--radius-sm);
+      padding:0 var(--s-5);font:inherit;font-size:15px;font-weight:600;
+      letter-spacing:-0.01em;cursor:pointer;
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      transition:all 180ms var(--ease);
+    }
+    .btn svg{width:16px;height:16px}
+    .btn-primary{
+      background:linear-gradient(135deg, var(--primary), var(--primary-strong));
+      color:#fff;box-shadow:var(--shadow-glow);
+    }
+    .btn-primary:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 12px 28px oklch(0.62 0.15 155 / 0.28)}
+    .btn-primary:active:not(:disabled){transform:translateY(0);filter:brightness(0.95)}
+    .btn-primary:disabled{opacity:.6;cursor:not-allowed}
+
+    .actions{display:flex;gap:var(--s-3);flex-wrap:wrap;margin-top:var(--s-6)}
+    .actions .btn{width:auto;flex:1;min-width:140px;height:42px;font-size:14px}
+    .btn-secondary{
+      background:var(--surface);color:var(--text);
+      border:1.5px solid var(--outline);
+    }
+    .btn-secondary:hover:not(:disabled){border-color:var(--primary);color:var(--primary-strong);background:var(--primary-softer);transform:translateY(-1px)}
+    .btn-secondary:active:not(:disabled){transform:translateY(0)}
+    .btn-ghost{
+      background:transparent;color:var(--text-muted);
+      border:1.5px solid transparent;
+    }
+    .btn-ghost:hover:not(:disabled){color:var(--danger);background:oklch(0.6 0.18 25 / 0.08)}
+
+    .hint{
+      margin:var(--s-6) 0 0;padding:var(--s-4);
+      background:var(--primary-softer);
+      border:1px solid oklch(0.88 0.04 155);
+      border-radius:var(--radius-sm);
+      font-size:13px;line-height:1.65;color:var(--text-muted);
+      display:flex;gap:10px;align-items:flex-start;
+    }
+    .hint svg{width:16px;height:16px;flex-shrink:0;margin-top:1px;color:var(--primary)}
+
+    .status{
+      margin-top:var(--s-5);padding:var(--s-4) var(--s-5);
+      background:var(--surface-variant);
+      border:1px solid var(--outline-soft);
+      border-radius:var(--radius-sm);
+      font-size:13px;line-height:1.6;color:var(--text);
+      white-space:pre-wrap;
+      min-height:48px;display:flex;align-items:center;
+      transition:all 200ms var(--ease);
+    }
+    .status::before{
+      content:'';width:6px;height:6px;border-radius:50%;
+      background:var(--text-faint);margin-right:10px;flex-shrink:0;
+    }
+    .status.ok{background:oklch(0.95 0.05 150);border-color:oklch(0.85 0.08 150);color:oklch(0.38 0.12 150)}
+    .status.ok::before{background:var(--success)}
+    .status.warn{background:oklch(0.96 0.06 70);border-color:oklch(0.88 0.08 70);color:oklch(0.4 0.13 70)}
+    .status.warn::before{background:var(--warning)}
+    .status.err{background:oklch(0.96 0.05 25);border-color:oklch(0.88 0.08 25);color:oklch(0.4 0.15 25)}
+    .status.err::before{background:var(--danger)}
+
+    .qr-section{
+      margin-top:var(--s-6);text-align:center;
+      padding:var(--s-6);background:var(--primary-softer);
+      border-radius:var(--radius);border:1px solid oklch(0.88 0.04 155);
+    }
+    .qr-section .qr-label{
+      font-size:13px;color:var(--text-muted);margin-bottom:var(--s-3);
+    }
+    .qr{
+      display:block;width:200px;height:200px;object-fit:contain;margin:0 auto;
+      border-radius:var(--radius-sm);background:#fff;
+      box-shadow:var(--shadow-md);padding:8px;
+    }
+
+    .hidden{display:none!important}
+
+    @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .panel{animation:rise 600ms var(--ease) backwards;animation-delay:120ms}
+    .brand-hero,.brand-features,.brand-foot{animation:rise 700ms var(--ease) backwards}
+    .brand-logo{animation:rise 500ms var(--ease) backwards}
+    .brand-hero{animation-delay:180ms}
+    .brand-features{animation-delay:300ms}
+    .brand-foot{animation-delay:420ms}
+
+    @media(max-width:860px){
+      body{grid-template-columns:1fr}
+      .brand-side{padding:var(--s-10) var(--s-6);min-height:auto}
+      .brand-features{display:none}
+      .panel-side{padding:var(--s-8) var(--s-5)}
+      .panel{padding:var(--s-8) var(--s-6)}
+    }
+    @media(max-width:480px){
+      .brand-side{padding:var(--s-8) var(--s-5)}
+      .brand-hero h1{font-size:24px}
+      .panel{padding:var(--s-6) var(--s-5)}
+      .panel h1{font-size:21px}
+      .actions .btn{min-width:0;width:100%}
+    }
+
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+    }
+  </style>
+</head>
+<body>
+  <aside class="brand-side">
+    <div class="brand-logo">
+      <span class="mark">T3</span>
+      <span>企业微信通知服务</span>
+    </div>
+    <div class="brand-hero">
+      <h1>管理后台<br>二维码运维中心</h1>
+      <p>管理员扫码登录后，服务端保存管理会话并自动更新公开关注二维码。所有 Cookie 加密存储于服务端，浏览器与公开接口均无法获取。</p>
+    </div>
+    <div class="brand-features">
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div><strong>端到端加密</strong><span>管理 Cookie 使用 AES-256-GCM 加密存储</span></div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div><strong>官方直连</strong><span>无中转服务器，数据直达腾讯企业微信</span></div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <div><strong>自动刷新</strong><span>每小时检查二维码年龄，过期前自动更新</span></div>
+      </div>
+    </div>
+    <div class="brand-foot">仅供企业管理员使用 · 操作受密码保护</div>
+  </aside>
+
+  <main class="panel-side">
+    <section class="panel">
+      <div class="panel-head">
+        <span class="panel-eyebrow">Admin Console</span>
+        <h1>微信插件二维码管理</h1>
+        <p class="panel-sub">输入管理员密码以继续</p>
+      </div>
+
+      <form id="loginForm">
+        <div class="field">
+          <label for="password">管理员密码</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input id="password" type="password" autocomplete="current-password" placeholder="请输入管理员密码" required>
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          <span>登录管理后台</span>
+        </button>
+      </form>
+
+      <div id="manager" class="hidden">
+        <div class="hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>只有在这里完成企业微信管理员扫码后，服务端才会保存管理会话并更新公开关注二维码。</span>
+        </div>
+
+        <div id="loginQrWrap" class="qr-section hidden">
+          <p class="qr-label">请使用企业微信管理员账号扫码</p>
+          <img id="loginQr" class="qr" alt="企业微信管理员登录二维码">
+        </div>
+
+        <div class="actions">
+          <button id="start" class="btn btn-primary" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h3M21 18v3"/></svg>
+            <span>扫码登录企业微信</span>
+          </button>
+          <button id="refresh" class="btn btn-secondary" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>刷新关注二维码</span>
+          </button>
+          <button id="logout" class="btn btn-ghost" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>退出管理</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="status" class="status">请输入管理员密码。</div>
+    </section>
+  </main>
+
+  <script>
+    const loginForm=document.getElementById('loginForm'),manager=document.getElementById('manager'),statusBox=document.getElementById('status'),loginQr=document.getElementById('loginQr'),loginQrWrap=document.getElementById('loginQrWrap');
+    let pollTimer=null;
+
+    async function api(url,options={}){
+      const r=await fetch(url,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
+      const d=await r.json().catch(()=>({error:'invalid_response'}));
+      if(!r.ok)throw new Error(d.error||'request_failed');
+      return d;
+    }
+
+    function showStatus(text,kind){
+      statusBox.textContent=text;
+      statusBox.classList.remove('ok','warn','err');
+      if(kind)statusBox.classList.add(kind);
+    }
+
+    async function loadStatus(){
+      try{
+        const d=await api('/api/admin/status');
+        loginForm.classList.add('hidden');
+        manager.classList.remove('hidden');
+        if(d.wxplugin.cookieAvailable){
+          showStatus(`管理员会话有效\n关注二维码：${d.wxplugin.qrAvailable?'已生成':'尚未生成'}`,'ok');
+        }else{
+          showStatus('尚未登录企业微信管理后台。','warn');
+        }
+      }catch{
+        loginForm.classList.remove('hidden');
+        manager.classList.add('hidden');
+        showStatus('请输入管理员密码。');
+      }
+    }
+
+    loginForm.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const btn=loginForm.querySelector('button[type=submit]');
+      btn.disabled=true;
+      try{
+        await api('/api/admin/login',{method:'POST',body:JSON.stringify({password:document.getElementById('password').value})});
+        document.getElementById('password').value='';
+        await loadStatus();
+      }catch(err){
+        showStatus(err.message==='invalid_credentials'?'密码错误，请重试。':'登录失败，请稍后再试。','err');
+      }finally{
+        btn.disabled=false;
+      }
+    });
+
+    document.getElementById('start').addEventListener('click',async()=>{
+      try{
+        clearInterval(pollTimer);
+        const d=await api('/api/admin/wxplugin/login/start',{method:'POST',body:'{}'});
+        loginQr.src=`/api/admin/wxplugin/login/qrcode?key=${encodeURIComponent(d.key)}&t=${Date.now()}`;
+        loginQrWrap.classList.remove('hidden');
+        showStatus('请使用企业微信管理员账号扫码。','warn');
+        pollTimer=setInterval(async()=>{
+          try{
+            const s=await api(`/api/admin/wxplugin/login/status?key=${encodeURIComponent(d.key)}`);
+            const kind=s.status==='success'?'ok':(s.status==='expired'||s.status==='cancelled'||s.status==='mobile_verification_required'?'err':'warn');
+            showStatus(s.message,kind);
+            if(['success','expired','cancelled','mobile_verification_required'].includes(s.status)){
+              clearInterval(pollTimer);
+              if(s.status==='success'){
+                loginQrWrap.classList.add('hidden');
+                await loadStatus();
+              }
+            }
+          }catch{
+            clearInterval(pollTimer);
+            showStatus('登录状态查询失败。','err');
+          }
+        },1500);
+      }catch(err){
+        showStatus(`无法生成登录二维码：${err.message}`,'err');
+      }
+    });
+
+    document.getElementById('refresh').addEventListener('click',async()=>{
+      try{
+        const d=await api('/api/admin/wxplugin/refresh',{method:'POST',body:'{}'});
+        showStatus(`关注二维码已更新。\n更新时间：${new Date(d.updatedAt).toLocaleString()}`,'ok');
+      }catch(err){
+        showStatus(`刷新失败：${err.message}`,'err');
+      }
+    });
+
+    document.getElementById('logout').addEventListener('click',async()=>{
+      clearInterval(pollTimer);
+      await api('/api/admin/logout',{method:'POST',body:'{}'}).catch(()=>{});
+      location.reload();
+    });
+
+    loadStatus();
+  </script>
+</body>
+</html>

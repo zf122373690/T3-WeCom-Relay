@@ -268,11 +268,17 @@ async function convertOpenUserid(kv, cfg, openUserid) {
   return match ? String(match.userid || '') : '';
 }
 async function resolveUserid(kv, cfg, sender) {
-  const direct = await getMember(kv, cfg, sender).catch(() => '');
-  if (direct) return direct;
-  const converted = await convertOpenUserid(kv, cfg, sender).catch(() => '');
-  if (converted) return converted;
-  throw Object.assign(new Error('userid_not_found'), { code: -2 });
+  let lastErr = null;
+  try {
+    const direct = await getMember(kv, cfg, sender);
+    if (direct) return direct;
+  } catch (e) { lastErr = e; }
+  try {
+    const converted = await convertOpenUserid(kv, cfg, sender);
+    if (converted) return converted;
+  } catch (e) { lastErr = e; }
+  // 透传底层企微 errcode（如 60020 白名单/IP 问题），避免被误导为 -2
+  throw Object.assign(new Error('userid_not_found'), { code: (lastErr && lastErr.code) || -2 });
 }
 function validNewUserid(value) {
   return /^[A-Za-z0-9._@-]+$/.test(value) && enc.encode(value).length <= 64;

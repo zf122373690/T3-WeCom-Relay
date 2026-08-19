@@ -499,6 +499,10 @@ async function callbackSignatureValid(cfg, url, ciphered) {
 async function handleCallback(request, env, cfg, kv) {
   const url = new URL(request.url);
   if (!configured(cfg)) return jsonResponse({ error: 'service_not_configured' }, 503);
+  // 直接浏览器打开/无签名参数访问：给出明确提示，避免误判为签名错误
+  if (!url.searchParams.get('msg_signature')) {
+    return jsonResponse({ error: 'missing_signature_params', hint: '此回调地址由企业微信服务器签名调用，不能直接在浏览器打开。请在企微管理后台「接收消息→回调配置」填写本地址，由企微发起签名验证。' }, 400);
+  }
   if (request.method === 'GET') {
     const ciphered = url.searchParams.get('echostr') || '';
     if (!await callbackSignatureValid(cfg, url, ciphered)) return jsonResponse({ error: 'invalid_signature' }, 403);

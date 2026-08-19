@@ -527,8 +527,11 @@
         const r=await fetch('/api/wxplugin/remind-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
         const d=await r.json().catch(()=>({}));
         if(r.ok){message.textContent='✓ 已通知管理员';return}
-        message.textContent=d.error==='reminder_cooldown'?'管理员近期已收到提醒':'提醒发送失败，请稍后再试';
-        if(d.error!=='reminder_cooldown')button.disabled=false;
+        if(d.error==='reminder_cooldown'){message.textContent='管理员近期已收到提醒';button.disabled=false;return}
+        if(d.error==='reminder_not_configured'){message.textContent='提醒功能未配置（缺少应用密钥或管理员账号）';button.disabled=false;return}
+        if(d.code!=null){message.textContent=`提醒发送失败（errcode: ${d.code}）`;}
+        else{message.textContent='提醒发送失败，请稍后再试';}
+        button.disabled=false;
       }catch{
         message.textContent='提醒发送失败，请稍后再试';
         button.disabled=false;

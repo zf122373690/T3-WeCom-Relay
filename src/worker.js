@@ -662,9 +662,11 @@ export default {
     try {
       return await route(request, env);
     } catch (error) {
-      console.error('[WECOM] request failed:', error.message);
+      console.error('[WECOM] request failed:', error.message, error.code != null ? `(code: ${error.code})` : '');
       const status = error.status || 500;
-      return jsonResponse({ error: status >= 500 ? 'internal_error' : error.message }, status);
+      const body = { error: status >= 500 ? 'internal_error' : (error.message || 'error') };
+      if (error.code != null) body.code = error.code;
+      return jsonResponse(body, status);
     }
   },
   async scheduled(event, env, ctx) {

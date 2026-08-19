@@ -1,0 +1,8 @@
+.env
+.dev.vars
+.wrangler
+node_modules/
+logs/
+data/
+.workbuddy/
+wecom-relay.zip

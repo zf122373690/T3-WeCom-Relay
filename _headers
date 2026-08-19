@@ -1,0 +1,10 @@
+# 静态资源响应头（Cloudflare Assets 自动应用）
+/admin
+  X-Frame-Options: DENY
+  Cache-Control: no-store
+
+/
+  Cache-Control: no-store
+
+/assets/*
+  Cache-Control: public, max-age=604800, immutable

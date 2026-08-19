@@ -1,0 +1,12 @@
+# 本地开发用环境变量（复制为 .dev.vars 后填入真实值，.dev.vars 已被 .gitignore 忽略，勿提交）
+# 非敏感项
+WECOM_CORP_ID=ww_your_corp_id
+WECOM_AGENT_ID=1000001
+WECOM_QR_ADMIN_USERID=zhengfei
+
+# 敏感项（也可改用 npx wrangler secret put 设置到生产环境）
+WECOM_SECRET=your_application_secret
+WECOM_CONTACTS_SECRET=your_contacts_sync_secret
+WECOM_CALLBACK_TOKEN=token_configured_in_wecom
+WECOM_CALLBACK_AES_KEY=43_character_encoding_aes_key
+ADMIN_PASSWORD=replace_with_a_strong_password

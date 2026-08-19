@@ -2,14 +2,12 @@
   "name": "t3-wecom-relay",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone webhook relay for WeCom application messages (Node + Cloudflare Workers)",
+  "description": "Standalone webhook relay for WeCom application messages (Node)",
   "main": "server.js",
   "scripts": {
-    "start": "node --env-file=.env server.js",
-    "check": "node --check server.js",
-    "dev": "npx wrangler dev",
-    "deploy": "npx wrangler deploy",
-    "check:worker": "npx wrangler deploy --dry-run"
+    "start": "node server.js",
+    "start:local": "node --env-file=.env server.js",
+    "check": "node --check server.js"
   },
   "engines": {
     "node": ">=18"

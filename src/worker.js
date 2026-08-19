@@ -648,6 +648,8 @@ async function route(request, env) {
   }
   // 企业微信回调
   if (pathname === '/wecom/callback') return handleCallback(request, env, cfg, kv);
+  // 未匹配路径：GET 回退到静态资源（含根目录验证文件 WW_verify_*.txt），其余 404
+  if (method === 'GET') return serveAsset(request, env, pathname);
   return jsonResponse({ error: 'not_found' }, 404);
 }
 

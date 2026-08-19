@@ -133,3 +133,20 @@ open https://<你的地址>/admin
 ## 与原版并存的说明
 
 `package.json` 的 `main` 仍指向 `server.js`（保留 Node 版运行能力），但 Workers 部署以 `wrangler.toml` 的 `main = "src/worker.js"` 为准，二者互不干扰。
+
+## 故障排查
+
+### 在 Dashboard 加完 Secret 后没生效 / 重部署报 `internal_error`
+Cloudflare 对「仅变更 Secret 的单独重部署」偶尔会返回 `internal_error`（平台已知坑），**不是代码问题**。
+最稳妥的修复是触发一次干净的整包重建：向仓库 push 任意提交，GitHub → Cloudflare 流水线会重新 `npx wrangler deploy`。
+Dashboard 里设的 Secret 是**账号级配置**，重建后会自动重新挂上，不会丢失。
+
+### 想看运行时真实报错（替代笼统的 `internal_error`）
+1. Dashboard → 你的 Worker → **Logs（实时日志）**：访问 `/health` 或首页时，worker 的 `console.error` 会把真实异常打印在这里。
+2. 或本地 `npx wrangler tail` 实时看日志。
+3. 部署失败的话，去 **Deployments** 里点开那条构建记录看完整构建日志。
+
+### 验证清单
+- `/health` 返回 `configured: true` 即表示 corp id / secret / callback 三件套均已就位。
+- 若 `configured: false`，按返回的字段逐项补齐对应 Secret。
+- 管理后台 `/admin` 登录需要 `ADMIN_PASSWORD` 这个 Secret（≥8 位）已设置。

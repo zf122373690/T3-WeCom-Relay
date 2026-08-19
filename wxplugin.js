@@ -7,6 +7,7 @@ const crypto = require('crypto');
 
 const WECOM_ADMIN_ORIGIN = 'https://work.weixin.qq.com';
 const QR_REFRESH_MS = 6 * 24 * 60 * 60 * 1000;
+const SESSION_KEEPALIVE_MS = 15 * 60 * 1000;
 
 function absoluteAdminUrl(value) {
   return new URL(value, WECOM_ADMIN_ORIGIN).toString();
@@ -38,21 +39,18 @@ class WxPluginManager {
     this.qrCode = '';
     this.qrUpdatedAt = 0;
     this.pendingLogins = new Map();
-    this.refreshTimer = null;
+    this.maintenanceTimer = null;
+    this.maintenanceRunning = false;
+    this.lastKeepAliveAt = 0;
+    this.lastKeepAliveError = '';
   }
 
   async init() {
     await fsp.mkdir(this.dataDir, { recursive: true });
     await this.loadState();
-    this.refreshTimer = setInterval(() => {
-      if (this.sid && Date.now() - this.qrUpdatedAt >= QR_REFRESH_MS) {
-        this.refreshQrCode().catch(() => {});
-      }
-    }, 60 * 60 * 1000);
-    this.refreshTimer.unref?.();
-    if (this.sid && Date.now() - this.qrUpdatedAt >= QR_REFRESH_MS) {
-      this.refreshQrCode().catch(() => {});
-    }
+    this.maintenanceTimer = setInterval(() => this.maintainSession(), SESSION_KEEPALIVE_MS);
+    this.maintenanceTimer.unref?.();
+    if (this.sid) this.maintainSession();
   }
 
   encrypt(value) {
@@ -112,8 +110,33 @@ class WxPluginManager {
     return {
       cookieAvailable: Boolean(this.sid),
       qrAvailable: Boolean(this.qrCode),
-      qrUpdatedAt: this.qrUpdatedAt || null
+      qrUpdatedAt: this.qrUpdatedAt || null,
+      lastKeepAliveAt: this.lastKeepAliveAt || null,
+      lastKeepAliveError: this.lastKeepAliveError || null
     };
+  }
+
+  async maintainSession() {
+    if (!this.sid || this.maintenanceRunning) return;
+    this.maintenanceRunning = true;
+    try {
+      if (Date.now() - this.qrUpdatedAt >= QR_REFRESH_MS) await this.refreshQrCode();
+      else await this.keepSessionAlive();
+      this.lastKeepAliveAt = Date.now();
+      this.lastKeepAliveError = '';
+    } catch (error) {
+      this.lastKeepAliveError = String(error?.message || error);
+    } finally {
+      this.maintenanceRunning = false;
+    }
+  }
+
+  async keepSessionAlive() {
+    if (!this.sid) throw new Error('wecom_admin_login_required');
+    const endpoint = new URL('/wework_admin/wxplugin/getDetail', WECOM_ADMIN_ORIGIN);
+    const result = await jsonRequest(endpoint, { headers: { Cookie: `wwrtx.sid=${this.sid}` } });
+    if (!result.data?.qrCode) throw new Error('wecom_admin_session_unavailable');
+    return true;
   }
 
   async startLogin() {
@@ -147,7 +170,11 @@ class WxPluginManager {
   }
 
   async pollLogin(key) {
-    this.requirePendingLogin(key);
+    const pending = this.requirePendingLogin(key);
+    if (pending.mobileVerification) {
+      return { status: 'mobile_verification_required', message: '请输入企业微信发送的手机验证码' };
+    }
+    if (pending.exchanging) return { status: 'waiting', message: '正在建立企业微信管理会话' };
     const endpoint = new URL('/wework_admin/wwqrlogin/check', WECOM_ADMIN_ORIGIN);
     endpoint.searchParams.set('r', String(Date.now()));
     endpoint.searchParams.set('status', '');
@@ -161,9 +188,15 @@ class WxPluginManager {
     if (status === 'QRCODE_SCAN_FAIL') return { status: 'cancelled', message: '登录已取消' };
     if (status !== 'QRCODE_SCAN_SUCC' || !data.auth_code) return { status: 'waiting', message: '等待确认' };
 
-    const login = await this.exchangeLogin(String(data.auth_code), key);
+    pending.exchanging = true;
+    let login;
+    try {
+      login = await this.exchangeLogin(String(data.auth_code), key);
+    } finally {
+      pending.exchanging = false;
+    }
     if (login.needsMobileVerification) {
-      return { status: 'mobile_verification_required', message: '企业微信要求手机验证码，本服务未保存登录 Cookie' };
+      return { status: 'mobile_verification_required', message: '企业微信要求手机验证，请先点击发送验证码' };
     }
     this.pendingLogins.delete(key);
     await this.refreshQrCode();
@@ -192,11 +225,75 @@ class WxPluginManager {
     const sid = cookieValue(secondResponse.headers, 'wwrtx.sid');
     if (!sid) {
       const location = secondResponse.headers.get('location') || '';
-      return { needsMobileVerification: location.includes('tl_key=') };
+      const verificationUrl = location ? new URL(absoluteAdminUrl(location)) : null;
+      const tlKey = verificationUrl?.searchParams.get('tl_key') || '';
+      if (!tlKey) return { needsMobileVerification: false };
+      await fetch(verificationUrl, {
+        headers: { Cookie: `wwrtx.tmp_sid=${tmpSid}` },
+        signal: AbortSignal.timeout(10000)
+      });
+      const pending = this.requirePendingLogin(key);
+      pending.mobileVerification = {
+        tmpSid,
+        tlKey,
+        referer: verificationUrl.toString()
+      };
+      return { needsMobileVerification: true };
     }
     this.sid = sid;
     await this.saveState();
     return { needsMobileVerification: false };
+  }
+
+  async captchaRequest(key, captcha) {
+    const pending = this.requirePendingLogin(key);
+    const verification = pending.mobileVerification;
+    if (!verification) throw new Error('wecom_mobile_verification_not_pending');
+    const response = await fetch(`${WECOM_ADMIN_ORIGIN}/wework_admin/mobile_confirm/confirm_captcha`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cookie': `wwrtx.tmp_sid=${verification.tmpSid}`,
+        'Referer': verification.referer
+      },
+      body: JSON.stringify(captcha ? { captcha, tl_key: verification.tlKey } : { tl_key: verification.tlKey }),
+      signal: AbortSignal.timeout(10000)
+    });
+    const text = await response.text();
+    let result;
+    try { result = JSON.parse(text); } catch { throw new Error('wecom_invalid_captcha_response'); }
+    if (!response.ok) throw new Error(`wecom_captcha_http_${response.status}`);
+    return { result, verification };
+  }
+
+  async sendMobileCaptcha(key) {
+    const { result } = await this.captchaRequest(key, '');
+    const error = result?.result;
+    if (error) throw new Error(error.humanMessage || error.message || `wecom_captcha_${error.errCode || 'failed'}`);
+    return { status: 'mobile_verification_required', message: '验证码已发送，请查看管理员手机' };
+  }
+
+  async confirmMobileCaptcha(key, code) {
+    const captcha = String(code || '').trim();
+    if (!/^\d{4,8}$/.test(captcha)) throw new Error('invalid_captcha');
+    const { result, verification } = await this.captchaRequest(key, captcha);
+    const error = result?.result;
+    if (error) throw new Error(error.humanMessage || error.message || `wecom_captcha_${error.errCode || 'failed'}`);
+
+    const endpoint = new URL('/wework_admin/login/choose_corp', WECOM_ADMIN_ORIGIN);
+    endpoint.searchParams.set('tl_key', verification.tlKey);
+    const response = await fetch(endpoint, {
+      redirect: 'manual',
+      headers: { Cookie: `wwrtx.tmp_sid=${verification.tmpSid}` },
+      signal: AbortSignal.timeout(10000)
+    });
+    const sid = cookieValue(response.headers, 'wwrtx.sid');
+    if (!sid) throw new Error('wecom_session_cookie_missing');
+    this.sid = sid;
+    this.pendingLogins.delete(key);
+    await this.saveState();
+    await this.refreshQrCode();
+    return { status: 'success', message: '手机验证成功，关注二维码已更新' };
   }
 
   async refreshQrCode() {

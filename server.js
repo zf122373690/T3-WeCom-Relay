@@ -77,8 +77,12 @@ function adminSession(req) {
   return session;
 }
 
-function requireAdmin(req) {
-  if (!adminSession(req)) throw Object.assign(new Error('admin_auth_required'), { status: 401 });
+function requireAdmin(req, res) {
+  const session = adminSession(req);
+  if (!session) throw Object.assign(new Error('admin_auth_required'), { status: 401 });
+  session.expiresAt = Date.now() + ADMIN_SESSION_MS;
+  const token = parseCookies(req).t3_admin || '';
+  res.setHeader('Set-Cookie', sessionCookie(req, token, Math.floor(ADMIN_SESSION_MS / 1000)));
 }
 
 function requestIp(req) {
@@ -346,7 +350,7 @@ async function adminApi(req, res, url, pathname) {
     return sendJson(res, 200, { ok: true });
   }
 
-  requireAdmin(req);
+  requireAdmin(req, res);
   if (pathname === '/api/admin/logout' && req.method === 'POST') {
     const token = parseCookies(req).t3_admin || '';
     if (token) adminSessions.delete(token);
@@ -366,6 +370,14 @@ async function adminApi(req, res, url, pathname) {
   }
   if (pathname === '/api/admin/wxplugin/login/status' && req.method === 'GET') {
     return sendJson(res, 200, await wxPlugin.pollLogin(url.searchParams.get('key') || ''));
+  }
+  if (pathname === '/api/admin/wxplugin/login/captcha/send' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req) || '{}');
+    return sendJson(res, 200, await wxPlugin.sendMobileCaptcha(body.key || ''));
+  }
+  if (pathname === '/api/admin/wxplugin/login/captcha/confirm' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req) || '{}');
+    return sendJson(res, 200, await wxPlugin.confirmMobileCaptcha(body.key || '', body.code || ''));
   }
   if (pathname === '/api/admin/wxplugin/refresh' && req.method === 'POST') {
     return sendJson(res, 200, await wxPlugin.refreshQrCode());

@@ -25,10 +25,24 @@
 
 ## 部署步骤
 
+### 0. Cloudflare 控制台构建设置（Git 推送自动部署必看）
+
+在 Cloudflare Dashboard → Workers & Pages → 你的项目 → **Settings → Build** 中：
+
+- **Build command（构建命令）**：填 `npx wrangler deploy`
+  - 不要写 `npm ci && wrangler deploy` 之类的组合。`npx wrangler` 会在构建时按需拉取 wrangler，
+    且不会把 144MB 的 `workerd` 二进制写进静态资源目录（避免 25MB 上传限制）。
+- **Install command（安装命令）**：保持默认即可。
+  - 本仓库 `package.json` 仅含 `@wecom/crypto` / `fast-xml-parser` 两个轻量运行时依赖（供 Node/Docker 版使用），
+    `npm ci` 现在只会装这 2 个小包，**不会再触发 wrangler postinstall / `--allow-scripts` 报错**。
+- **部署后**首次推送即触发构建，日志里应看到 `npx wrangler deploy` 成功上传 Worker。
+
+> 如果之前构建因 `npm ci` 失败，改完 `package.json` 推送后重新触发一次构建即可。
+
 ### 1. 安装与登录 Wrangler
 
 ```bash
-npm install        # 安装 wrangler (devDependency)
+npm install        # 安装 Node 版运行时依赖（@wecom/crypto / fast-xml-parser），wrangler 通过 npx 调用
 npx wrangler login # 浏览器授权 Cloudflare 账号
 ```
 

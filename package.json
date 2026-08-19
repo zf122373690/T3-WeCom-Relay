@@ -7,9 +7,9 @@
   "scripts": {
     "start": "node --env-file=.env server.js",
     "check": "node --check server.js",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "check:worker": "wrangler deploy --dry-run"
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "check:worker": "npx wrangler deploy --dry-run"
   },
   "engines": {
     "node": ">=18"
@@ -17,8 +17,5 @@
   "dependencies": {
     "@wecom/crypto": "^1.0.1",
     "fast-xml-parser": "^5.7.0"
-  },
-  "devDependencies": {
-    "wrangler": "^3.0.0"
   }
 }

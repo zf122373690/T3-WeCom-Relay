@@ -25,6 +25,13 @@ WECOM_CORP_ID = "ww059a8dadfd559537"
 WECOM_AGENT_ID = "1000004"
 WECOM_QR_ADMIN_USERID = "zhengfei"
 
+# 企业微信 API 反代（可选，用于绕过「企业可信 IP」白名单）
+# 留空 = 直连 qyapi.weixin.qq.com（Cloudflare 出口 IP 动态，可能被企微白名单拒，errcode 60020）
+# 设置后 = 所有 qyapi 请求改走该固定 IP 反代域名；将该反代服务器 IP 加入企微「企业可信 IP」即可
+# PROXY_TOKEN 为可选的反代鉴权令牌（与 nginx 示例里的 token 一致），防止反代被滥用
+PROXY_URL = ""
+PROXY_TOKEN = ""
+
 # 敏感配置请用 secret（不写入文件）：
 #   npx wrangler secret put WECOM_SECRET
 #   npx wrangler secret put WECOM_CONTACTS_SECRET

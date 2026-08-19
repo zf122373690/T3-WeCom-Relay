@@ -118,6 +118,40 @@ open https://<你的地址>/admin
 
 保存时企业微信会发 GET 校验，Worker 自动解密 `echostr` 返回明文即通过。
 
+## 绕过「企业可信 IP」白名单（反代方案）
+
+企业微信自建应用的「企业可信 IP」会校验**调用方（你的服务器）出口 IP**。Cloudflare Workers 出口 IP 动态共享、无法固定，因此 `message/send`、`user/get` 等 API 会返回 `errcode: 60020`（访问 IP 不在白名单）。即使把白名单清空仍不生效时，需用**固定 IP 反代**：
+
+**原理**：Worker 把发往 `qyapi.weixin.qq.com` 的请求改发到你自己的一台固定 IP 服务器（反代域名），由该服务器转发到企微。把该服务器 IP 加入企微「企业可信 IP」白名单即可。
+
+> 注意：仅 `qyapi.weixin.qq.com` 的 API 调用受白名单限制；管理后台扫码登录那批 `wework_admin` 网页会话请求不受限，无需反代。
+
+### A. 搭建反代（固定 IP 服务器，如 1 核小机 / 现有 VPS）
+
+参考仓库根目录 `nginx-proxy.example.conf`：
+
+```bash
+# 1. 复制并修改：server_name / 证书路径 / token
+cp nginx-proxy.example.conf /etc/nginx/conf.d/wecom-proxy.conf
+vim /etc/nginx/conf.d/wecom-proxy.conf     # 把 REPLACE_WITH_YOUR_PROXY_TOKEN 改成随机长串
+nginx -t && systemctl reload nginx
+# 2. 把反代域名（如 proxy.yourdomain.com）解析到该服务器
+# 3. 将该服务器公网 IP 加入企微 → 自建应用 → 企业可信 IP
+```
+
+### B. 在 Cloudflare 配置反代
+
+Dashboard → 你的 Worker → 设置 → 变量和密钥（或 `wrangler.toml` 的 `[vars]`）：
+
+- `PROXY_URL` = `https://proxy.yourdomain.com`（你的反代域名，须 https）
+- `PROXY_TOKEN` = 与 nginx 里一致的随机长串（反代鉴权，防止被他人滥用）
+
+设置后推一次提交触发重建，Worker 即改走反代。`PROXY_URL` 留空则保持直连。
+
+### C. 验证
+
+重建成功后，`/health` 不受影响；之前报 `60020` / `查询失败，错误码 -2` 的提醒与收消息功能应恢复正常。
+
 ## Cron 说明
 
 `wrangler.toml` 已配置 `crons = ["0 */6 * * *"]`（每 6 小时）。触发逻辑：

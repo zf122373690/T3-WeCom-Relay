@@ -32,7 +32,29 @@ function loadConfig(env) {
     CALLBACK_TOKEN: String(env.WECOM_CALLBACK_TOKEN || '').trim(),
     CALLBACK_AES_KEY: String(env.WECOM_CALLBACK_AES_KEY || '').trim(),
     ADMIN_PASSWORD: String(env.ADMIN_PASSWORD || '').trim(),
+    PROXY_URL: String(env.PROXY_URL || '').trim(),
+    PROXY_TOKEN: String(env.PROXY_TOKEN || '').trim(),
   };
+}
+
+// ---------- 企业微信 API 反代（可选，用于绕过「企业可信 IP」白名单） ----------
+// 当配置 PROXY_URL 时，所有发往 qyapi.weixin.qq.com 的请求改走反代域名。
+// 反代服务器使用固定 IP，将其加入企业微信「企业可信 IP」白名单即可（Cloudflare 出口 IP 动态无法固定）。
+// wework_admin 网页会话类请求不受白名单限制，故不在此列。
+function proxiedUrl(cfg, input) {
+  const proxy = cfg.PROXY_URL;
+  if (!proxy) return input;
+  const u = (typeof input === 'string') ? new URL(input) : input;
+  if (!u || u.hostname !== 'qyapi.weixin.qq.com') return input;
+  const base = proxy.replace(/\/+$/, '');
+  return `${base}${u.pathname}${u.search}`;
+}
+async function proxiedFetch(cfg, input, init = {}) {
+  const url = proxiedUrl(cfg, input);
+  if (cfg.PROXY_TOKEN) {
+    init = { ...init, headers: { ...(init.headers || {}), 'X-WeCom-Proxy-Token': cfg.PROXY_TOKEN } };
+  }
+  return fetch(url, init);
 }
 
 function configured(cfg) {
@@ -215,7 +237,7 @@ async function wecomGetToken(kv, secret, cacheName, cfg, force = false) {
   const url = new URL('https://qyapi.weixin.qq.com/cgi-bin/gettoken');
   url.searchParams.set('corpid', cfg.CORP_ID);
   url.searchParams.set('corpsecret', secret);
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const res = await proxiedFetch(cfg, url, { signal: AbortSignal.timeout(8000) });
   const result = await res.json();
   if (!res.ok || result.errcode !== 0 || !result.access_token) throw Object.assign(new Error('wecom_auth_failed'), { code: Number(result.errcode || -1) });
   const ttl = Math.max(60, Number(result.expires_in || 7200) - 300);
@@ -224,7 +246,7 @@ async function wecomGetToken(kv, secret, cacheName, cfg, force = false) {
 }
 async function wecomRequest(kv, cfg, endpoint, options = {}, retry = true) {
   endpoint.searchParams.set('access_token', await wecomGetToken(kv, cfg.APP_SECRET, 'app', cfg));
-  const res = await fetch(endpoint, { ...options, signal: AbortSignal.timeout(8000) });
+  const res = await proxiedFetch(cfg, endpoint, { ...options, signal: AbortSignal.timeout(8000) });
   const result = await res.json();
   if (retry && (result.errcode === 40014 || result.errcode === 42001)) {
     await kv.put('app_token', JSON.stringify({ value: '', expiresAt: 0 }));
@@ -237,7 +259,7 @@ async function wecomRequest(kv, cfg, endpoint, options = {}, retry = true) {
 async function updateUserid(kv, cfg, userid, newUserid, retry = true) {
   const endpoint = new URL('https://qyapi.weixin.qq.com/cgi-bin/user/update');
   endpoint.searchParams.set('access_token', await wecomGetToken(kv, cfg.CONTACTS_SECRET, 'contacts', cfg));
-  const res = await fetch(endpoint, {
+  const res = await proxiedFetch(cfg, endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ userid, new_userid: newUserid }),

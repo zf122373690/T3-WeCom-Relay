@@ -10,11 +10,10 @@ binding = "ASSETS"
 not_found_handling = "none"
 
 # 持久化状态（token 缓存 / 登录态 / 二维码状态 / 限流 / 待确认变更）
-# 部署前请先创建命名空间：npx wrangler kv namespace create WECOM_RELAY_KV
-# 然后把下方 id 替换为输出中的 id
+# 命名空间已创建于 Cloudflare 控制台（绑定名 WECOM_RELAY_KV）
 [[kv_namespaces]]
 binding = "WECOM_RELAY_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "8375939009bd4b49ba7a165f0c7f4f31"
 
 # 每 6 小时触发一次，用于在企业微信二维码过期前自动刷新
 [crons]
@@ -22,8 +21,8 @@ crons = ["0 */6 * * *"]
 
 # 非敏感配置（会写入 wrangler.toml，可见）
 [vars]
-WECOM_CORP_ID = "ww_your_corp_id"
-WECOM_AGENT_ID = "1000001"
+WECOM_CORP_ID = "ww059a8dadfd559537"
+WECOM_AGENT_ID = "1000004"
 WECOM_QR_ADMIN_USERID = "zhengfei"
 
 # 敏感配置请用 secret（不写入文件）：

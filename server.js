@@ -163,7 +163,7 @@ async function wecomRequest(endpoint, options = {}, retry = true) {
     await getToken(APP_SECRET, 'app', true);
     return wecomRequest(endpoint, options, false);
   }
-  if (!response.ok || result.errcode !== 0) throw Object.assign(new Error('wecom_api_failed'), { code: Number(result.errcode || -1) });
+  if (!response.ok || result.errcode !== 0) throw Object.assign(new Error('wecom_api_failed'), { code: Number(result.errcode || -1), detail: String(result.errmsg || '') });
   return result;
 }
 
@@ -431,9 +431,13 @@ async function createServer() {
     await wxPlugin.init();
   }
   return http.createServer((req, res) => route(req, res).catch(error => {
-    if (!error.status || error.status >= 500) console.error('[WECOM] request failed:', error.message);
-    if (!res.headersSent) sendJson(res, error.status || 500, { error: error.status ? error.message : 'internal_error' });
-    else res.destroy(error);
+    if (!error.status || error.status >= 500) console.error('[WECOM] request failed:', error.message, error.code != null ? `(code ${error.code})` : '');
+    if (!res.headersSent) {
+      const body = { error: error.status ? error.message : 'internal_error' };
+      if (error.code != null) body.code = error.code;
+      if (error.detail) body.detail = error.detail;
+      sendJson(res, error.status || 500, body);
+    } else res.destroy(error);
   }));
 }
 

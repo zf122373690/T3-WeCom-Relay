@@ -523,6 +523,8 @@
       60020:'企业可信IP白名单未包含服务器出口IP，请到企微管理后台「企业可信IP」添加服务器公网IP',
       40014:'access_token 无效，请检查应用 Secret 是否正确',
       42001:'access_token 已过期，请重试',
+      23:'接收者 UserID 不存在或不在应用可见范围内，请核对 WECOM_QR_ADMIN_USERID 是否与通讯录 UserID 完全一致（区分大小写），并确保该成员在应用「可见范围」内',
+      60111:'UserID 不存在（已离职/被删除/不在通讯录，或明文/密文用错）',
       81013:'接收者不在应用可见范围内，请检查应用成员范围或管理员账号',
       60011:'agentid 与应用不匹配，请核对 WECOM_AGENT_ID',
       82001:'指定的接收者无合法成员，请核对管理员账号',
@@ -538,7 +540,7 @@
         if(r.ok){message.textContent='✓ 已通知管理员';return}
         if(d.error==='reminder_cooldown'){message.textContent='管理员近期已收到提醒';button.disabled=false;return}
         if(d.error==='reminder_not_configured'){message.textContent='提醒功能未配置（缺少应用密钥或管理员账号）';button.disabled=false;return}
-        if(d.code!=null){message.textContent=`提醒发送失败（errcode: ${d.code}）${ERR_HINT[d.code]?`：${ERR_HINT[d.code]}`:''}`;}
+        if(d.code!=null){const hint=ERR_HINT[d.code];message.textContent=`提醒发送失败（errcode: ${d.code}）${hint?`：${hint}`:(d.detail?`：${d.detail}`:'')}`;}
         else{message.textContent='提醒发送失败，请稍后再试';}
         button.disabled=false;
       }catch{

@@ -181,7 +181,12 @@ async function wecomRequest(endpoint, options = {}, retry = true) {
     await getToken(APP_SECRET, 'app', true);
     return wecomRequest(endpoint, options, false);
   }
-  if (!response.ok || result.errcode !== 0) throw Object.assign(new Error('wecom_api_failed'), { code: Number(result.errcode || -1), detail: String(result.errmsg || '') });
+  if (!response.ok || result.errcode !== 0) {
+    const invalidFields = ['invaliduser', 'invalidparty', 'invalidtag', 'unlicenseduser']
+      .filter(k => result[k]).map(k => `${k}=${result[k]}`).join(' ');
+    const detail = [String(result.errmsg || ''), invalidFields].filter(Boolean).join(' | ');
+    throw Object.assign(new Error('wecom_api_failed'), { code: Number(result.errcode || -1), detail });
+  }
   return result;
 }
 

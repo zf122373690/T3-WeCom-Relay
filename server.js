@@ -38,6 +38,24 @@ if (OUTBOUND_PROXY) {
 function withProxy(options = {}) {
   return outboundProxyAgent ? { ...options, dispatcher: outboundProxyAgent } : options;
 }
+
+// 统一的 qyapi 出站请求：把网络层失败（超时/不可达）转成显式错误。
+// 关键：fetch 超时抛出的 DOMException(TimeoutError) 自带遗留属性 code=23（DOM TIMEOUT_ERR），
+// 若不剥离会被全局错误处理器当成企微 errcode 透传，前端就会误显示「errcode: 23」。
+async function fetchQyapi(endpoint, options = {}) {
+  try {
+    return await fetch(endpoint, withProxy({ ...options, signal: AbortSignal.timeout(8000) }));
+  } catch (error) {
+    const timedOut = error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    const cause = error && (error.cause?.code || error.cause?.message) || '';
+    throw Object.assign(new Error(timedOut ? 'wecom_api_timeout' : 'wecom_api_unreachable'), {
+      status: 504,
+      detail: timedOut
+        ? `请求企微 API 超时（8 秒）${OUTBOUND_PROXY ? `，当前经代理 ${OUTBOUND_PROXY} 出站，请确认代理可达（VPS 防火墙/安全组需放行该端口）` : '，请检查服务器到 qyapi.weixin.qq.com 的网络'}`
+        : `无法连接企微 API${cause ? `（${cause}）` : ''}${OUTBOUND_PROXY ? `，当前经代理 ${OUTBOUND_PROXY} 出站，请确认代理可达` : ''}`
+    });
+  }
+}
 const INDEX_FILE = path.join(ROOT, 'index.html');
 const ADMIN_FILE = path.join(ROOT, 'admin.html');
 const WECHAT_TUTORIAL_IMAGE = path.join(ROOT, 'assets', 'wechat-my-enterprise.png');
@@ -162,7 +180,7 @@ async function getToken(secret, cacheName, force = false) {
   const endpoint = new URL('https://qyapi.weixin.qq.com/cgi-bin/gettoken');
   endpoint.searchParams.set('corpid', CORP_ID);
   endpoint.searchParams.set('corpsecret', secret);
-  const response = await fetch(endpoint, withProxy({ signal: AbortSignal.timeout(8000) }));
+  const response = await fetchQyapi(endpoint);
   const result = await response.json();
   if (!response.ok || result.errcode !== 0 || !result.access_token) throw Object.assign(new Error('wecom_auth_failed'), { code: Number(result.errcode || -1) });
   const ttl = Math.max(60, Number(result.expires_in || 7200) - 300);
@@ -174,7 +192,7 @@ async function getToken(secret, cacheName, force = false) {
 
 async function wecomRequest(endpoint, options = {}, retry = true) {
   endpoint.searchParams.set('access_token', await getToken(APP_SECRET, 'app'));
-  const response = await fetch(endpoint, withProxy({ ...options, signal: AbortSignal.timeout(8000) }));
+  const response = await fetchQyapi(endpoint, options);
   const result = await response.json();
   if (retry && (result.errcode === 40014 || result.errcode === 42001)) {
     appAccessToken = { value: '', expiresAt: 0 };
@@ -217,12 +235,11 @@ async function sendQrAdminReminder() {
 async function updateUserid(userid, newUserid, retry = true) {
   const endpoint = new URL('https://qyapi.weixin.qq.com/cgi-bin/user/update');
   endpoint.searchParams.set('access_token', await getToken(CONTACTS_SECRET, 'contacts'));
-  const response = await fetch(endpoint, withProxy({
+  const response = await fetchQyapi(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ userid, new_userid: newUserid }),
-    signal: AbortSignal.timeout(8000)
-  }));
+    body: JSON.stringify({ userid, new_userid: newUserid })
+  });
   const result = await response.json();
   if (retry && (result.errcode === 40014 || result.errcode === 42001)) {
     contactsAccessToken = { value: '', expiresAt: 0 };

@@ -541,6 +541,7 @@
         if(d.error==='reminder_cooldown'){message.textContent='管理员近期已收到提醒';button.disabled=false;return}
         if(d.error==='reminder_not_configured'){message.textContent='提醒功能未配置（缺少应用密钥或管理员账号）';button.disabled=false;return}
         if(d.code!=null){const hint=ERR_HINT[d.code];message.textContent=`提醒发送失败（errcode: ${d.code}）${hint?`：${hint}`:(d.detail?`：${d.detail}`:'')}`;}
+        else if(d.detail){message.textContent=`提醒发送失败：${d.detail}`;}
         else{message.textContent='提醒发送失败，请稍后再试';}
         button.disabled=false;
       }catch{

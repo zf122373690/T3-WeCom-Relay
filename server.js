@@ -20,6 +20,24 @@ const CALLBACK_TOKEN = String(process.env.WECOM_CALLBACK_TOKEN || '').trim();
 const CALLBACK_AES_KEY = String(process.env.WECOM_CALLBACK_AES_KEY || '').trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '');
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+
+// 可选出站代理：内网 / frp 部署时，企微 API 出站调用默认从内网机器自身出口发出（家宽动态 IP 易触发 60020）。
+// 设置 WECOM_API_PROXY=http://<proxy-host>:<port> 后，所有 qyapi.weixin.qq.com 请求经该代理发出，
+// 从而让企微看到的源 IP 变为代理服务器（如 frp VPS 的固定公网 IP）。留空则直连。
+let outboundProxyAgent = null;
+const OUTBOUND_PROXY = String(process.env.WECOM_API_PROXY || '').trim();
+if (OUTBOUND_PROXY) {
+  try {
+    const { ProxyAgent } = require('undici');
+    outboundProxyAgent = new ProxyAgent(OUTBOUND_PROXY);
+    console.log('[WECOM] outbound API proxy enabled:', OUTBOUND_PROXY);
+  } catch (e) {
+    console.error('[WECOM] WECOM_API_PROXY set but undici unavailable:', e.message);
+  }
+}
+function withProxy(options = {}) {
+  return outboundProxyAgent ? { ...options, dispatcher: outboundProxyAgent } : options;
+}
 const INDEX_FILE = path.join(ROOT, 'index.html');
 const ADMIN_FILE = path.join(ROOT, 'admin.html');
 const WECHAT_TUTORIAL_IMAGE = path.join(ROOT, 'assets', 'wechat-my-enterprise.png');
@@ -144,7 +162,7 @@ async function getToken(secret, cacheName, force = false) {
   const endpoint = new URL('https://qyapi.weixin.qq.com/cgi-bin/gettoken');
   endpoint.searchParams.set('corpid', CORP_ID);
   endpoint.searchParams.set('corpsecret', secret);
-  const response = await fetch(endpoint, { signal: AbortSignal.timeout(8000) });
+  const response = await fetch(endpoint, withProxy({ signal: AbortSignal.timeout(8000) }));
   const result = await response.json();
   if (!response.ok || result.errcode !== 0 || !result.access_token) throw Object.assign(new Error('wecom_auth_failed'), { code: Number(result.errcode || -1) });
   const ttl = Math.max(60, Number(result.expires_in || 7200) - 300);
@@ -156,7 +174,7 @@ async function getToken(secret, cacheName, force = false) {
 
 async function wecomRequest(endpoint, options = {}, retry = true) {
   endpoint.searchParams.set('access_token', await getToken(APP_SECRET, 'app'));
-  const response = await fetch(endpoint, { ...options, signal: AbortSignal.timeout(8000) });
+  const response = await fetch(endpoint, withProxy({ ...options, signal: AbortSignal.timeout(8000) }));
   const result = await response.json();
   if (retry && (result.errcode === 40014 || result.errcode === 42001)) {
     appAccessToken = { value: '', expiresAt: 0 };
@@ -194,12 +212,12 @@ async function sendQrAdminReminder() {
 async function updateUserid(userid, newUserid, retry = true) {
   const endpoint = new URL('https://qyapi.weixin.qq.com/cgi-bin/user/update');
   endpoint.searchParams.set('access_token', await getToken(CONTACTS_SECRET, 'contacts'));
-  const response = await fetch(endpoint, {
+  const response = await fetch(endpoint, withProxy({
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ userid, new_userid: newUserid }),
     signal: AbortSignal.timeout(8000)
-  });
+  }));
   const result = await response.json();
   if (retry && (result.errcode === 40014 || result.errcode === 42001)) {
     contactsAccessToken = { value: '', expiresAt: 0 };
